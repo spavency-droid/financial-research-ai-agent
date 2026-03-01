@@ -4,4 +4,4 @@ pandas
 plotly
 langchain
 langgraph
-openai
+langchain-openai
