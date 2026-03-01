@@ -24,6 +24,11 @@ Detailed explanation available in:
 - Technical indicators (RSI, Moving Averages)
 - Fundamental metrics(PE Ratio, EPS, Market Cap)
 
+## Conceptual Workflow
+User Input → LangGraph Router → Data Fetch Tool → 
+Technical Analysis Tool → Insight Generator (LLM) → 
+Structured Financial Report
+
 ##Portfolio Management (v2.0)
 - Add stocks with quantity
 - Track holdings
