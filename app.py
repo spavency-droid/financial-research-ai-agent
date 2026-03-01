@@ -1,136 +1,155 @@
 import streamlit as st
 import yfinance as yf
+import pandas as pd
 import plotly.graph_objects as go
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
+from langgraph.graph import StateGraph
 
-st.set_page_config(page_title="Financial Research AI Agent", layout="wide")
+# ----------------------------------
+# Page Config
+# ----------------------------------
+st.set_page_config(page_title="AI Financial Research Agent", layout="wide")
 
-st.title("🌍 Financial Research AI Agent")
-st.markdown("Analyze global stocks and track your portfolio in real time.")
+st.title("📊 AI Financial Research Agent")
+st.markdown("LangGraph-powered intelligent stock analysis system")
 
-# ==============================
-# SESSION STATE FOR PORTFOLIO
-# ==============================
-if "portfolio" not in st.session_state:
-    st.session_state.portfolio = {}
+# ----------------------------------
+# LLM Setup
+# ----------------------------------
+llm = ChatOpenAI(
+    temperature=0.3,
+    model="gpt-3.5-turbo",
+    openai_api_key=st.secrets["OPENAI_API_KEY"]
+)
 
-# ==============================
-# SIDEBAR - PORTFOLIO SECTION
-# ==============================
-st.sidebar.header("📁 Portfolio Management")
+# ----------------------------------
+# Agent State
+# ----------------------------------
+class AgentState(dict):
+    pass
 
-with st.sidebar.form("add_stock_form"):
-    st.subheader("Add Stock")
-    p_symbol = st.text_input("Stock Symbol (e.g., TSLA, RELIANCE.NS)")
-    p_qty = st.number_input("Quantity", min_value=1, step=1)
-    p_price = st.number_input("Buy Price", min_value=0.0, step=0.1)
-    submit = st.form_submit_button("Add to Portfolio")
+# ----------------------------------
+# Tool 1: Fetch Market Data
+# ----------------------------------
+def fetch_data(state):
+    symbol = state["symbol"]
+    stock = yf.Ticker(symbol)
+    data = stock.history(period="3mo")
 
-    if submit and p_symbol:
-        symbol = p_symbol.upper()
+    if data.empty:
+        state["error"] = "Invalid stock symbol or no data available."
+        return state
 
-        if symbol in st.session_state.portfolio:
-            old_qty = st.session_state.portfolio[symbol]["quantity"]
-            old_price = st.session_state.portfolio[symbol]["avg_price"]
+    state["data"] = data
+    return state
 
-            new_qty = old_qty + p_qty
-            new_avg = ((old_qty * old_price) + (p_qty * p_price)) / new_qty
+# ----------------------------------
+# Tool 2: Technical Indicators
+# ----------------------------------
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
 
-            st.session_state.portfolio[symbol]["quantity"] = new_qty
-            st.session_state.portfolio[symbol]["avg_price"] = new_avg
-        else:
-            st.session_state.portfolio[symbol] = {
-                "quantity": p_qty,
-                "avg_price": p_price
-            }
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
 
-        st.sidebar.success(f"{symbol} added to portfolio.")
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-# ==============================
-# MAIN STOCK ANALYSIS SECTION
-# ==============================
-symbol = st.text_input("🔍 Enter Stock Symbol (e.g., TSLA, AAPL, RELIANCE.NS)")
+def technical_analysis(state):
+    if "error" in state:
+        return state
+
+    data = state["data"]
+
+    data["MA20"] = data["Close"].rolling(20).mean()
+    data["MA50"] = data["Close"].rolling(50).mean()
+    data["RSI"] = compute_rsi(data["Close"])
+
+    state["data"] = data
+    return state
+
+# ----------------------------------
+# Tool 3: AI Insight Generator
+# ----------------------------------
+def generate_insight(state):
+    if "error" in state:
+        return state
+
+    latest = state["data"].iloc[-1]
+
+    prompt = f"""
+    Analyze the following stock data:
+
+    Symbol: {state['symbol']}
+    Latest Close Price: {latest['Close']}
+    RSI: {latest['RSI']}
+    MA20: {latest['MA20']}
+    MA50: {latest['MA50']}
+
+    Provide:
+    1. Trend Analysis
+    2. Risk Level (Low/Medium/High)
+    3. Short-term Outlook
+    4. Trading Suggestion (Buy/Hold/Sell with reasoning)
+    """
+
+    response = llm([HumanMessage(content=prompt)])
+    state["analysis"] = response.content
+    return state
+
+# ----------------------------------
+# Build LangGraph Workflow
+# ----------------------------------
+workflow = StateGraph(AgentState)
+
+workflow.add_node("fetch_data", fetch_data)
+workflow.add_node("technical_analysis", technical_analysis)
+workflow.add_node("generate_insight", generate_insight)
+
+workflow.set_entry_point("fetch_data")
+workflow.add_edge("fetch_data", "technical_analysis")
+workflow.add_edge("technical_analysis", "generate_insight")
+
+agent = workflow.compile()
+
+# ----------------------------------
+# Streamlit UI
+# ----------------------------------
+symbol = st.text_input("Enter Indian Stock Symbol (Example: RELIANCE.NS)")
 
 if symbol:
-    stock = yf.Ticker(symbol.upper())
-    data = stock.history(period="1mo")
+    with st.spinner("Running AI Financial Analysis..."):
+        result = agent.invoke({"symbol": symbol})
 
-    if not data.empty:
-        info = stock.info
-        current_price = data["Close"].iloc[-1]
+    if "error" in result:
+        st.error(result["error"])
+    else:
+        data = result["data"]
 
-        col1, col2, col3, col4 = st.columns(4)
+        # Chart Section
+        st.subheader("📈 Price Chart with Moving Averages")
 
-        col1.metric("Current Price", f"{current_price:.2f}")
-        col2.metric("PE Ratio", info.get("trailingPE", "N/A"))
-        col3.metric("EPS", info.get("trailingEps", "N/A"))
-        col4.metric("Market Cap", info.get("marketCap", "N/A"))
-
-        # Price Chart
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=data.index,
-            y=data["Close"],
-            mode="lines",
-            name="Close Price"
-        ))
+        fig.add_trace(go.Scatter(x=data.index, y=data["Close"], name="Close"))
+        fig.add_trace(go.Scatter(x=data.index, y=data["MA20"], name="MA20"))
+        fig.add_trace(go.Scatter(x=data.index, y=data["MA50"], name="MA50"))
 
         fig.update_layout(
-            title=f"{symbol.upper()} - 1 Month Price Trend",
             xaxis_title="Date",
-            yaxis_title="Price",
-            template="plotly_white"
+            yaxis_title="Price (INR)",
+            template="plotly_dark"
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-    else:
-        st.error("Stock not found.")
+        # RSI
+        st.subheader("📊 RSI Indicator")
+        st.line_chart(data["RSI"])
 
-# ==============================
-# PORTFOLIO DISPLAY SECTION
-# ==============================
-st.subheader("📊 Portfolio Overview")
-
-if st.session_state.portfolio:
-    total_invested = 0
-    total_value = 0
-
-    for sym, data in st.session_state.portfolio.items():
-        stock = yf.Ticker(sym)
-        hist = stock.history(period="5d")
-
-        if hist.empty:
-            continue
-
-        current_price = hist["Close"].iloc[-1]
-        qty = data["quantity"]
-        avg_price = data["avg_price"]
-
-        invested = qty * avg_price
-        current_val = qty * current_price
-        profit_loss = current_val - invested
-
-        total_invested += invested
-        total_value += current_val
-
-        st.write(f"### {sym}")
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric("Shares", qty)
-        col2.metric("Avg Buy Price", f"{avg_price:.2f}")
-        col3.metric("Current Price", f"{current_price:.2f}")
-        col4.metric("P/L", f"{profit_loss:.2f}")
-
-        st.markdown("---")
-
-    total_pl = total_value - total_invested
-
-    st.write("## Portfolio Summary")
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Total Invested", f"{total_invested:.2f}")
-    col2.metric("Current Value", f"{total_value:.2f}")
-    col3.metric("Total Profit/Loss", f"{total_pl:.2f}")
-
-else:
-    st.info("Portfolio is empty. Add stocks from sidebar.")
+        # AI Insight
+        st.subheader("🧠 AI Generated Financial Insight")
+        st.write(result["analysis"])
