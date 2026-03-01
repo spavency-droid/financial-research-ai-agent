@@ -1,5 +1,8 @@
 # System Architecture
 
+**Version:** v2.0  
+**Upgrade:** CLI-based Agent → Interactive Streamlit Dashboard 
+
 # Overview
 This AI-Powered Financial Research Agent is built using LangGraph for agent orchestration and modular tool execution. The system processes user queries, dynamically selects tools, performs financial analysis, and generates structured insights.
 
