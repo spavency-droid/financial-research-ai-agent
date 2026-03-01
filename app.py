@@ -6,150 +6,186 @@ from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage
 from langgraph.graph import StateGraph
 
-# ----------------------------------
-# Page Config
-# ----------------------------------
 st.set_page_config(page_title="AI Financial Research Agent", layout="wide")
+st.title("🧠 AI Financial Research Agent")
 
-st.title("📊 AI Financial Research Agent")
-st.markdown("LangGraph-powered intelligent stock analysis system")
-
-# ----------------------------------
+# -----------------------------
 # LLM Setup
-# ----------------------------------
+# -----------------------------
 llm = ChatOpenAI(
-    temperature=0.3,
+    temperature=0,
     model="gpt-3.5-turbo",
     openai_api_key=st.secrets["OPENAI_API_KEY"]
 )
 
-# ----------------------------------
+# -----------------------------
 # Agent State
-# ----------------------------------
+# -----------------------------
 class AgentState(dict):
     pass
 
-# ----------------------------------
-# Tool 1: Fetch Market Data
-# ----------------------------------
+# -----------------------------
+# Router Node
+# -----------------------------
+def router(state):
+    query = state["query"]
+
+    prompt = f"""
+    Classify the user request into one of these categories:
+    - technical
+    - risk
+
+    Only return one word.
+    Query: {query}
+    """
+
+    response = llm([HumanMessage(content=prompt)])
+    decision = response.content.strip().lower()
+
+    state["route"] = decision
+    return state
+
+# -----------------------------
+# Fetch Data Tool
+# -----------------------------
 def fetch_data(state):
     symbol = state["symbol"]
     stock = yf.Ticker(symbol)
     data = stock.history(period="3mo")
 
     if data.empty:
-        state["error"] = "Invalid stock symbol or no data available."
+        state["error"] = "Invalid symbol."
         return state
 
     state["data"] = data
     return state
 
-# ----------------------------------
-# Tool 2: Technical Indicators
-# ----------------------------------
-def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-def technical_analysis(state):
-    if "error" in state:
-        return state
-
+# -----------------------------
+# Technical Analysis Tool
+# -----------------------------
+def technical_tool(state):
     data = state["data"]
 
     data["MA20"] = data["Close"].rolling(20).mean()
     data["MA50"] = data["Close"].rolling(50).mean()
-    data["RSI"] = compute_rsi(data["Close"])
+
+    delta = data["Close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
+    data["RSI"] = 100 - (100 / (1 + rs))
 
     state["data"] = data
+    state["analysis_type"] = "Technical Analysis"
     return state
 
-# ----------------------------------
-# Tool 3: AI Insight Generator
-# ----------------------------------
-def generate_insight(state):
-    if "error" in state:
-        return state
+# -----------------------------
+# Risk Tool
+# -----------------------------
+def risk_tool(state):
+    data = state["data"]
 
-    latest = state["data"].iloc[-1]
+    volatility = data["Close"].pct_change().std() * (252 ** 0.5)
+    state["risk_score"] = round(volatility, 4)
+    state["analysis_type"] = "Risk Analysis"
+    return state
+
+# -----------------------------
+# Insight Generator
+# -----------------------------
+def generate_insight(state):
+
+    if state["analysis_type"] == "Technical Analysis":
+        latest = state["data"].iloc[-1]
+        context = f"""
+        Close: {latest['Close']}
+        RSI: {latest['RSI']}
+        MA20: {latest['MA20']}
+        MA50: {latest['MA50']}
+        """
+
+    else:
+        context = f"Volatility (annualized): {state['risk_score']}"
 
     prompt = f"""
-    Analyze the following stock data:
+    You are a financial analyst.
 
-    Symbol: {state['symbol']}
-    Latest Close Price: {latest['Close']}
-    RSI: {latest['RSI']}
-    MA20: {latest['MA20']}
-    MA50: {latest['MA50']}
+    Provide structured insight for:
+    {state['analysis_type']}
 
-    Provide:
-    1. Trend Analysis
-    2. Risk Level (Low/Medium/High)
-    3. Short-term Outlook
-    4. Trading Suggestion (Buy/Hold/Sell with reasoning)
+    Data:
+    {context}
+
+    Include:
+    - Interpretation
+    - Risk level
+    - Actionable suggestion
     """
 
     response = llm([HumanMessage(content=prompt)])
-    state["analysis"] = response.content
+    state["final_report"] = response.content
     return state
 
-# ----------------------------------
-# Build LangGraph Workflow
-# ----------------------------------
+# -----------------------------
+# Conditional Routing Logic
+# -----------------------------
+def route_decision(state):
+    return state["route"]
+
+# -----------------------------
+# Build LangGraph
+# -----------------------------
 workflow = StateGraph(AgentState)
 
-workflow.add_node("fetch_data", fetch_data)
-workflow.add_node("technical_analysis", technical_analysis)
-workflow.add_node("generate_insight", generate_insight)
+workflow.add_node("router", router)
+workflow.add_node("fetch", fetch_data)
+workflow.add_node("technical", technical_tool)
+workflow.add_node("risk", risk_tool)
+workflow.add_node("insight", generate_insight)
 
-workflow.set_entry_point("fetch_data")
-workflow.add_edge("fetch_data", "technical_analysis")
-workflow.add_edge("technical_analysis", "generate_insight")
+workflow.set_entry_point("router")
+
+workflow.add_edge("router", "fetch")
+
+workflow.add_conditional_edges(
+    "fetch",
+    route_decision,
+    {
+        "technical": "technical",
+        "risk": "risk"
+    }
+)
+
+workflow.add_edge("technical", "insight")
+workflow.add_edge("risk", "insight")
 
 agent = workflow.compile()
 
-# ----------------------------------
+# -----------------------------
 # Streamlit UI
-# ----------------------------------
-symbol = st.text_input("Enter Indian Stock Symbol (Example: RELIANCE.NS)")
+# -----------------------------
+query = st.text_input("Ask something (Example: Analyze RELIANCE.NS technically)")
+symbol = st.text_input("Enter Stock Symbol (Example: RELIANCE.NS)")
 
-if symbol:
-    with st.spinner("Running AI Financial Analysis..."):
-        result = agent.invoke({"symbol": symbol})
+if query and symbol:
+    with st.spinner("Agent thinking..."):
+        result = agent.invoke({
+            "query": query,
+            "symbol": symbol
+        })
 
     if "error" in result:
         st.error(result["error"])
     else:
-        data = result["data"]
+        st.subheader("📊 AI Report")
+        st.write(result["final_report"])
 
-        # Chart Section
-        st.subheader("📈 Price Chart with Moving Averages")
+        if result["analysis_type"] == "Technical Analysis":
+            st.subheader("📈 Chart")
+            data = result["data"]
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=data.index, y=data["Close"], name="Close"))
-        fig.add_trace(go.Scatter(x=data.index, y=data["MA20"], name="MA20"))
-        fig.add_trace(go.Scatter(x=data.index, y=data["MA50"], name="MA50"))
-
-        fig.update_layout(
-            xaxis_title="Date",
-            yaxis_title="Price (INR)",
-            template="plotly_dark"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        # RSI
-        st.subheader("📊 RSI Indicator")
-        st.line_chart(data["RSI"])
-
-        # AI Insight
-        st.subheader("🧠 AI Generated Financial Insight")
-        st.write(result["analysis"])
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=data.index, y=data["Close"], name="Close"))
+            fig.add_trace(go.Scatter(x=data.index, y=data["MA20"], name="MA20"))
+            fig.add_trace(go.Scatter(x=data.index, y=data["MA50"], name="MA50"))
+            st.plotly_chart(fig, use_container_width=True)
