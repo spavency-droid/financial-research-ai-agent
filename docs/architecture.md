@@ -11,7 +11,11 @@ This AI-Powered Financial Research Agent is built using LangGraph for agent orch
 4. Tools fetch stock, news, and economic data.
 5. Data is processed and analyzed.
 6. LLM synthesizes insights.
-7. Streamlit renders charts and results.
+7. Streamlit renders interactive dashboard with:
+  - Charts
+  - Portfolio tracking
+  - Profit/Loss metrics
+  - Fundamental indicators
 
 # Architectural Layers
 
@@ -38,9 +42,21 @@ LLM parses user input and extracts:
 - Moving averages
 - Sentiment scoring
 - Risk metrics
+- PE Ratio
+- EPS
+- Market Cap
+- Fundamental health indicators
 
 # 5. Presentation Layer
 Streamlit dashboard visualizes:
 - Charts
 - Insights
 - Risk summaries.
+
+# 6. Portfolio Management Layer
+Handles:
+- Add/remove stocks
+- Quantity tracking
+- Average buy price
+- Profit/Loss calculation
+- Portfolio value aggregation
