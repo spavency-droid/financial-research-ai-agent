@@ -8,7 +8,6 @@ The system dynamically selects tools, performs both technical and fundamental an
 - Python
 - LangChain
 - LangGraph
-- Streamlit
 - yfinance
 - Plotly/Matplotlib
 
@@ -24,10 +23,6 @@ Detailed explanation available in:
 - Technical indicators (RSI, Moving Averages)
 - Fundamental metrics(PE Ratio, EPS, Market Cap)
 
-## Conceptual Workflow
-User Input → LangGraph Router → Data Fetch Tool → 
-Technical Analysis Tool → Insight Generator (LLM) → 
-Structured Financial Report
 
 ##Portfolio Management (v2.0)
 - Add stocks with quantity
@@ -42,8 +37,6 @@ Structured Financial Report
 - Risk assessment
 - Sentiment analysis
 
-## Deployment
-https://financial-research-ai-agent-fbdpwwykgwz5hxbuiuzeng.streamlit.app/
 
 ##Project Evolution
 - v1.0 – CLI-based Financial Research Agent
