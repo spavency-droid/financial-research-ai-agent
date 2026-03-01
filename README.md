@@ -1,6 +1,8 @@
 # financial-research-ai-agent
 ## Overview
-An intelligent financial research agent built using LangGraph for orchestration and Streamlit for visualization. The system dynamically selects tools, performs technical analysis, and generates structured financial insights.
+An AI-powered Financial Research Agent built using LangGraph for intelligent orchestration and Streamlit for interactive visualization.
+
+The system dynamically selects tools, performs both technical and fundamental analysis, tracks portfolio performance, and generates structured financial insights through an interactive web dashboard.
 
 ## Tech Stack
 - Python
@@ -8,7 +10,7 @@ An intelligent financial research agent built using LangGraph for orchestration 
 - LangGraph
 - Streamlit
 - yfinance
-- Plotly
+- Plotly/Matplotlib
 
 ## System Architecture
 ![Architecture](docs/architecture.png)
@@ -16,18 +18,35 @@ An intelligent financial research agent built using LangGraph for orchestration 
 Detailed explanation available in:
 [Architecture Documentation](docs/architecture.md)
 
-## Features
+### Features
+##Stock Analysis
 - Real-time stock data analysis
 - Technical indicators (RSI, Moving Averages)
-- Sentiment analysis
+- Fundamental metrics(PE Ratio, EPS, Market Cap)
+
+##Portfolio Management (v2.0)
+- Add stocks with quantity
+- Track holdings
+- Calculate Profit/Loss
+- Portfolio value aggregation
+
+## AI Agent Capabilities
+- Dynamic tool selection using LangGraph
+- Query understanding via LLM
+- Modular graph-based orchestration
 - Risk assessment
-- Modular agent graph design
+- Sentiment analysis
 
 ## Deployment
 https://financial-research-ai-agent-fbdpwwykgwz5hxbuiuzeng.streamlit.app/
+
+##Project Evolution
+- v1.0 – CLI-based Financial Research Agent
+- v2.0 – Interactive Streamlit Dashboard + Portfolio Management
 
 ## Future Improvements
 - Vector database integration
 - RAG for financial reports
 - Multi-agent collaboration
 - Docker deployment
+- Backtesting engine
