@@ -13,7 +13,7 @@ The system dynamically selects tools, performs both technical and fundamental an
 - Plotly/Matplotlib
 
 ## System Architecture
-![Architecture](docs/architecture.png)
+![Architecture](docs/AGENT_WORKFLOW.md)
 
 Detailed explanation available in:
 [Architecture Documentation](docs/architecture.md)
