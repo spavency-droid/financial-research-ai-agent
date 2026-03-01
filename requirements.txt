@@ -3,5 +3,7 @@ yfinance
 pandas
 plotly
 langchain
-langgraph
+langchain-core
 langchain-openai
+langgraph
+openai
